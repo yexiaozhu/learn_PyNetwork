@@ -1,59 +1,30 @@
 #!/usr/bin/env python3
 #coding=utf-8
 #author="yexiaozhu"
-import argparse
 import socket
-import sys
 
-def main():
-    # setup argument parsing
-    parser = argparse.ArgumentParser(description='Socket Error Examples')
-    parser.add_argument('--host', action="store", dest="host", required=False)
-    parser.add_argument('--port', action="store", dest="port", type=int, required=False)
-    parser.add_argument('--file', action="store", dest="file", required=False)
-    given_args = parser.parse_args()
-    host = given_args.host
-    port = given_args.port
-    filename = given_args.file
+SEND_BUF_SIZE = 4096
+RECV_BUF_SIZE = 4096
 
-    # First try-except block -- create socket
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        print(s)
-    except socket.error as e:
-        print("Error creating socket: %s" %e)
-        sys.exit(1)
+def modify_buff_size():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-    # Second try-except block -- connect to given host/port
-    try:
-        s.connect((host, port))
-    except socket.gaierror as e:
-        print("Address-related error connecting to server: %s" %e)
-        sys.exit(1)
-    except socket.error as e:
-        print("Connection error: %s" %e)
-        sys.exit(1)
+    # Get the size of the socket's send buffer
+    bufsize = sock.getsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF)
+    print("Buffer size [Before]:%d" %bufsize)
 
-    # Third try-except block --sending data
-    try:
-        #print(type(filename))
-        data = "GET %s HTTP/1.0\r\n\r\n" %filename
-        s.sendall(data.encode(encoding='utf_8'))
-    except socket.error as e:
-        print("Error sending data: %s" %e)
-        sys.exit(1)
+    sock.setsockopt(socket.SOL_TCP, socket.TCP_NODELAY, 1)
+    sock.setsockopt(
+        socket.SOL_SOCKET,
+        socket.SO_SNDBUF,
+        SEND_BUF_SIZE)
+    sock.setsockopt(
+        socket.SOL_SOCKET,
+        socket.SO_RCVBUF,
+        RECV_BUF_SIZE)
 
-    while 1:
-        # Fourth tr-except block -- waiting to receive data from remote host
-        try:
-            buf = s.recv(2048).decode()
-        except socket.error as e:
-            print("Error receiving data: %s" %e)
-            sys.exit(1)
-        if not len(buf):
-            break
-        # write the received data
-        sys.stdout.write(buf)
+    bufsize = sock.getsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF)
+    print("Buffer size [After]:%d" %bufsize)
 
 if __name__ == '__main__':
-    main()
+    modify_buff_size()
