@@ -4,14 +4,10 @@
 
 import socket
 
-def convert_integer():
-    data = 1234
-    # 32-bit
-    print("Original: %s => Long host byte order: %s, Network byte order: %s"
-          %(data, socket.ntohl(data), socket.htonl(data)))
-    # 26-bit
-    print("Original: %s => Short host byte order: %s, Network byte order: %s"
-          %(data, socket.ntohl(data), socket.htonl(data)))
-
+def test_socket_timeout():
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    print("Default socket timeout: %s" %s.gettimeout())
+    s.settimeout(100)
+    print("Current socket timeout: %s" %s.gettimeout())
 if __name__ == '__main__':
-    convert_integer()
+    test_socket_timeout()
