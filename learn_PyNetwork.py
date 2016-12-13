@@ -4,11 +4,14 @@
 
 import socket
 
-def find_service_name():
-    protocolname = 'tcp'
-    for port in [80, 25]:
-        print("Port: %s => service name: %s" %(port, socket.getservbyport(port, protocolname)))
-    print("Port: %s => service name: %s" %(53, socket.getservbyport(53, 'udp')))
+def convert_integer():
+    data = 1234
+    # 32-bit
+    print("Original: %s => Long host byte order: %s, Network byte order: %s"
+          %(data, socket.ntohl(data), socket.htonl(data)))
+    # 26-bit
+    print("Original: %s => Short host byte order: %s, Network byte order: %s"
+          %(data, socket.ntohl(data), socket.htonl(data)))
 
 if __name__ == '__main__':
-    find_service_name()
+    convert_integer()
