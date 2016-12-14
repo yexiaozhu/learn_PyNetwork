@@ -1,24 +1,38 @@
 #!/usr/bin/env python3
 #coding=utf-8
 #author="yexiaozhu"
+import argparse
 import socket
-import struct
+host = 'localhost'
+data_payload = 2048
+backlog = 5
 
-import time
-
-NTP_SERVER = "0.uk.pool.ntp.org"
-TIME1970 = 2208988800
-
-def sntp_client():
-    client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    data = '\x1b' + 47 * '\0'
-    client.sendto(data.encode(encoding='utf-8'), (NTP_SERVER, 123))
-    data, address = client.recvfrom(1024)
-    if data:
-        print('Response received from:', address)
-    t = struct.unpack('!12I', data)[10]
-    t -= TIME1970
-    print('\tTime=%s' %time.ctime(t))
+def echo_server(port):
+    """ A simple echo server"""
+    # Create a TCP socket
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    # Enable reuse address/port
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    # Bind the socket to the port
+    server_address = (host, port)
+    print("Connection to %s port %s" % server_address)
+    sock.bind(server_address)
+    # Listen to clients, backlog argument specifies the max no. of queued connections
+    sock.listen(backlog)
+    while True:
+        print("Waiting to receive message from client")
+        client, address = sock.accept()
+        data = client.recv(data_payload)
+        if data:
+            print("Data: %s" %data)
+            client.send(data)
+            print("sent %s bytes back to %s" %(data, address))
+        # end connection
+        client.close()
 
 if __name__ == '__main__':
-    sntp_client()
+    parser = argparse.ArgumentParser(description='Socket Server Example')
+    parser.add_argument('--port', action="store", dest="port", type=int, required=True)
+    given_args = parser.parse_args()
+    port = given_args.port
+    echo_server(port)
