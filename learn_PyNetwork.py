@@ -1,38 +1,76 @@
 #!/usr/bin/env python3
 #coding=utf-8
 #author="yexiaozhu"
-import argparse
+import os
 import socket
-host = 'localhost'
-data_payload = 2048
-backlog = 5
+import socketserver
+import threading
 
-def echo_server(port):
-    """ A simple echo server"""
-    # Create a TCP socket
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    # Enable reuse address/port
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    # Bind the socket to the port
-    server_address = (host, port)
-    print("Connection to %s port %s" % server_address)
-    sock.bind(server_address)
-    # Listen to clients, backlog argument specifies the max no. of queued connections
-    sock.listen(backlog)
-    while True:
-        print("Waiting to receive message from client")
-        client, address = sock.accept()
-        data = client.recv(data_payload)
-        if data:
-            print("Data: %s" %data)
-            client.send(data)
-            print("sent %s bytes back to %s" %(data, address))
-        # end connection
-        client.close()
+SERVER_HOST = 'localhost'
+SERVER_PORT = 0 # tells the kernel to pick up a port dynamically
+BUF_SIZE = 1024
+ECHO_MSG = 'Hello echo server!'
+
+class ForkingClient():
+    """A client to tes forking server"""
+    def __init__(self, ip, port):
+        # Create a socket
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # Connection to the server
+        self.sock.connect((ip, port))
+
+    def run(self):
+        """ Client playing with the server"""
+        # Send the data to server
+        current_process_id = os.getpid()
+        print("PID %s Sending echo message to server : %s" %(current_process_id, ECHO_MSG))
+        send_data_length = self.sock.send(ECHO_MSG.encode(encoding='utf-8'))
+        print("Sent: %d characters, so far..." %send_data_length)
+
+        # Display server response
+        response = self.sock.recv(BUF_SIZE)
+        response = response.decode('utf-8')
+        print("PID %s received: %s" %(current_process_id, response[5:]))
+
+    def shutdown(self):
+        """ Cleanup the client socket """
+        self.sock.close()
+
+class ForkingServerRequestHandler(socketserver.BaseRequestHandler):
+    def handle(self):
+        # Send the echo back to the client
+        data = self.request.recv(BUF_SIZE)
+        data = data.decode('utf-8')
+        current_process_id = os.getpid()
+        response = "%s: %s" %(current_process_id, data)
+        print("Server sending response [current_process_id: data] = [%s]" %response)
+        self.request.send(response.encode(encoding='utf-8'))
+        return
+
+class ForkingServer(socketserver.ForkingMixIn, socketserver.TCPServer):
+    """Nothing to add here, inherited everything necessary from parents"""
+    pass
+
+def main():
+    # Launch the server
+    server = ForkingServer((SERVER_HOST, SERVER_PORT), ForkingServerRequestHandler)
+    ip, port = server.server_address # Retrieve the port number
+    server_thread = threading.Thread(target=server.serve_forever)
+    server_thread.setDaemon(True) # don't hang on exit
+    server_thread.start()
+    print("Server loop running PID: %s" %os.getpid())
+
+    # Launch the client(s)
+    client1 = ForkingClient(ip, port)
+    client1.run()
+
+    client2 = ForkingClient(ip, port)
+    client2.run()
+    # Clean them up
+    server.shutdown()
+    client1.shutdown()
+    client2.shutdown()
+    server.socket.close()
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Socket Server Example')
-    parser.add_argument('--port', action="store", dest="port", type=int, required=True)
-    given_args = parser.parse_args()
-    port = given_args.port
-    echo_server(port)
+    main()
