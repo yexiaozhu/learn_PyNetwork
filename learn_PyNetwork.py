@@ -2,16 +2,33 @@
 #coding=utf-8
 #author="yexiaozhu"
 import socket
+import sys
+def reuse_socket_addr():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-def test_socket_modes():
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.setblocking(1)
-    s.settimeout(0.5)
-    s.bind(("127.0.0.1", 0))
+    # Get the old state of the SO_REUSEADDR option
+    old_state = sock.getsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR)
+    print("OLd sock state: %s" %old_state)
 
-    socket_address = s.getsockname()
-    print("Trivial Server launched on socket: %s" %str(socket_address))
-    while(1):
-        s.listen(1)
+    # Enable the SO_REUSERADDR option
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    new_state = sock.getsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR)
+    print("New sock state: %s" %new_state)
+
+    local_port = 8282
+
+    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    srv.bind(('', local_port))
+    srv.listen(1)
+    print("Listening on port: %s" %local_port)
+    while True:
+        try:
+            connection, addr = srv.accept()
+            print("Connected by %s:%s" %(addr[0], addr[1]))
+        except KeyboardInterrupt:
+            break
+        except socket.error as msg:
+            print("%s" %msg)
 if __name__ == '__main__':
-    test_socket_modes()
+    reuse_socket_addr()
