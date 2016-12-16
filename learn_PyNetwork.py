@@ -11,183 +11,66 @@ import select
 import pickle
 
 SERVER_HOST = 'localhost'
-CHAT_SERVER_NAME = 'server'
 
-# Some utilities
-def send(channel, *args):
-    buffer = pickle.dumps(args)
-    value = socket.htonl(len(buffer))
-    size = struct.pack("L", value)
-    channel.send(size)
-    channel.send(buffer)
+EOL1 = b'\n\n'
+EOL2 = b'\n\r\n'
+SERVER_RESPONSE = b"""Hello from Epoll Server!"""
 
-def receive(channel):
-    size = struct.calcsize("L")
-    size = channel.recv(size)
-    try:
-        size = socket.ntohl(struct.unpack("L", size)[0])
-    except struct.error as e:
-        return ""
-    buf = ""
-    while len(buf) < size:
-        buf = channel.recv(size - len(buf))
-    return pickle.loads(buf)[0]
+class EpollServer(object):
+    """ A socket server using Epoll"""
 
-class ChatServer(object):
-    """ An example chat server using select"""
-    def __init__(self, port, backlog=5):
-        self.clients = 0
-        self.clientmap = {}
-        self.outputs = [] # list output sockets
-        self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.server.bind((SERVER_HOST, port))
-        print("Server listening to port: %s ..." %port)
-        self.server.listen(backlog)
-        # Catch keyboard interrupts
-        signal.signal(signal.SIGINT, self.sighandler)
-
-    def sighandler(self, signum, frame):
-        """ Clean up client outputs """
-        # Close the server
-        print("Shutting down server...")
-        # Close existing client sockets
-        for output in self.outputs:
-            output.close()
-        self.server.close()
-
-    def get_client_name(self, client):
-        """ Return the name of the client"""
-        info = self.clientmap[client]
-        host, name = info[0][0], info[1]
-        return '@'.join((name, host))
+    def __init__(self, host=SERVER_HOST, port=0):
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.sock.bind((host, port))
+        self.sock.listen(1)
+        self.sock.setblocking(0)
+        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        print("Started Epoll Server")
+        self.epoll = select.epoll()
+        self.epoll.register(self.sock.fileno(), select.EPOLLIN)
 
     def run(self):
-        inputs = [self.server, sys.stdin]
-        self.outputs = []
-        running = True
-        while running:
-            try:
-                readable, writeable, exceptional = select.select(inputs, self.outputs, [])
-            except select.error as e:
-                break
-
-            for sock in readable:
-                if sock == self.server:
-                    # handle the server socket
-                    client, address = self.server.accept()
-                    print("Chat server: got connection %d from %s" %(client.fileno(), address))
-
-                    # Read the login name
-                    cname = receive(client).split('NAME: ')[1]
-
-                    # Compute client name and send back
-                    self.clients += 1
-                    send(client, 'CLIENT: ' + str(address[0]))
-                    inputs.append(client)
-                    self.clientmap[client] = (address, cname)
-                    # Send joining information to other clients
-                    msg = "\n(Connected: New client (%d) from %s)" %(self.clients, self.get_client_name(client))
-                    for output in self.outputs:
-                        send(output, msg)
-                    self.outputs.append(client)
-
-                elif sock == sys.stdin:
-                    # handle standard input
-                    junk = sys.stdin.readline()
-                    running = False
-                else:
-                    # handle all other sockets
-                    try:
-                        data = receive(sock)
-                        print(data)
-                        if data:
-                            # Send as new client's message.
-                            msg = '\n#[' + self.get_client_name(sock) + ']>>' + data
-                            # Send data to all except ourself
-                            for output in self.outputs:
-                                if output != sock:
-                                    send(output, msg)
-                        else:
-                            print("Chat server: %d hung up" %sock.fileno())
-                            self.clients -= 1
-                            sock.close()
-                            inputs.remove(sock)
-                            self.outputs.remove(sock)
-
-                            # Sending client leaving information to others
-                            msg = "\n(Now hung up: Client from %s)" %self.get_client_name(sock)
-                            for output in self.outputs:
-                                send(output, msg)
-                    except socket.error as e:
-                        # Remove
-                        inputs.remove(sock)
-                        self.outputs.remove(sock)
-        self.server.close()
-
-class ChatClient(object):
-    """ A command line chat client using select"""
-
-    def __init__(self, name, port, host=SERVER_HOST):
-        self.name = name
-        self.connected = False
-        self.host = host
-        self.port = port
-        # Initial prompt
-        self.prompt='[' + '@'.join((name, socket.gethostname().split('.')[0])) + ']>'
-        # Connect to server at port
+        """Executes epoll server operation"""
         try:
-            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.sock.connect((host, self.port))
-            print("Now connected to chat server@ port %d" %self.port)
-            self.connected = True
-            # Send my name...
-            send(self.sock,'NAME: ' + self.name)
-            data = receive(self.sock)
-            # Contains client address, set it
-            addr = data.split('CLIENT: ')[1]
-            self.prompt = '[' + '@'.join((self.name, addr)) + ']>'
-        except socket.error as e:
-            print("Failed to connect to chat server @ port %d" %self.port)
-            sys.exit()
+            connections = {};requests = {};responses = {}
+            while True:
+                events = self.epoll.poll(1)
+                #print(events)
+                for fileno, event in events:
+                    print(fileno, event, select.EPOLLIN, select.EPOLLOUT, self.sock.fileno())
+                    if fileno == self.sock.fileno():
+                        connection, address = self.sock.accept()
+                        connection.setblocking(0)
+                        self.epoll.register(connection.fileno(), select.EPOLLIN)
+                        connections[connection.fileno()] = connection
+                        requests[connection.fileno()] = b''
+                        responses[connection.fileno()] = SERVER_RESPONSE
+                    elif event & select.EPOLLIN:
+                        requests[fileno] += connections[fileno].recv(1024)
+                        print(requests[fileno], EOL1, EOL2)
+                        if EOL1 in requests[fileno] or EOL2 in requests[fileno]:
+                            self.epoll.modify(fileno, select.EPOLLOUT)
+                            print('-' * 40 + '\n' + requests[fileno].decode()[:-2])
+                    elif event & select.EPOLLOUT:
+                        byteswritten = connections[fileno].send(responses[fileno])
+                        responses[fileno] = responses[fileno][byteswritten:]
+                        if len(responses[fileno]) == 0:
+                            self.epoll.modify(fileno, 0)
+                            connections[fileno].shutdown(socket.SHUT_RDWR)
+                    elif event & select.EPOLLHUP:
+                        self.epoll.unregister(fileno)
+                        connections[fileno].close()
+                        del connections[fileno]
+        finally:
+            self.epoll.unregister(self.sock.fileno())
+            self.epoll.close()
+            self.sock.close()
 
-    def run(self):
-        """ Chat client main loop """
-        while self.connected:
-            try:
-                sys.stdout.write(self.prompt)
-                sys.stdout.flush()
-                # Wait for input from stdin and socket
-                readable, writeable, exceptional = select.select([0, self.sock], [],[])
-                for sock in readable:
-                    if sock == 0:
-                        data = sys.stdin.readline().strip()
-                        if data:
-                            send(self.sock, data)
-                    elif sock == self.sock:
-                        data = receive(self.sock)
-                        if not data:
-                            print("Client shutting down.")
-                            self.connected = False
-                            break
-                        else:
-                            sys.stdout.write(data + '\n')
-                            sys.stdout.flush()
-            except KeyboardInterrupt:
-                print("Client interrupted.")
-                self.sock.close()
-                break
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Socket Server Example with Select')
-    parser.add_argument('--name', action="store", dest="name", required=True)
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Socket Server Example with Epoll')
     parser.add_argument('--port', action="store", dest="port", type=int, required=True)
     given_args = parser.parse_args()
     port = given_args.port
-    name = given_args.name
-    if name == CHAT_SERVER_NAME:
-        server = ChatServer(port)
-        server.run()
-    else:
-        client = ChatClient(name=name, port=port)
-        client.run()
+    server = EpollServer(host=SERVER_HOST, port=port)
+    server.run()
