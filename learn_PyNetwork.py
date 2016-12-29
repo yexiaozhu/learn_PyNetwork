@@ -1,76 +1,31 @@
 #!/usr/bin/env python3
 #coding=utf-8
 #author="yexiaozhu"
+import diesel
 import argparse
-import signal
-import socket
-import struct
-import sys
-import select
+class EchoServer(object):
+    """ An echo server using diesel"""
+    def handler(self, remote_addr):
+        """Runs the echo server"""
+        host, port = remote_addr[0], remote_addr[1]
+        print("Echo client connected from: %s:%d" %(host, port))
 
-import pickle
-
-SERVER_HOST = 'localhost'
-
-EOL1 = b'\n\n'
-EOL2 = b'\n\r\n'
-SERVER_RESPONSE = b"""Hello from Epoll Server!"""
-
-class EpollServer(object):
-    """ A socket server using Epoll"""
-
-    def __init__(self, host=SERVER_HOST, port=0):
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.sock.bind((host, port))
-        self.sock.listen(1)
-        self.sock.setblocking(0)
-        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        print("Started Epoll Server")
-        self.epoll = select.epoll()
-        self.epoll.register(self.sock.fileno(), select.EPOLLIN)
-
-    def run(self):
-        """Executes epoll server operation"""
-        try:
-            connections = {};requests = {};responses = {}
-            while True:
-                events = self.epoll.poll(1)
-                #print(events)
-                for fileno, event in events:
-                    print(fileno, event, select.EPOLLIN, select.EPOLLOUT, self.sock.fileno())
-                    if fileno == self.sock.fileno():
-                        connection, address = self.sock.accept()
-                        connection.setblocking(0)
-                        self.epoll.register(connection.fileno(), select.EPOLLIN)
-                        connections[connection.fileno()] = connection
-                        requests[connection.fileno()] = b''
-                        responses[connection.fileno()] = SERVER_RESPONSE
-                    elif event & select.EPOLLIN:
-                        requests[fileno] += connections[fileno].recv(1024)
-                        print(requests[fileno], EOL1, EOL2)
-                        if EOL1 in requests[fileno] or EOL2 in requests[fileno]:
-                            self.epoll.modify(fileno, select.EPOLLOUT)
-                            print('-' * 40 + '\n' + requests[fileno].decode()[:-2])
-                    elif event & select.EPOLLOUT:
-                        byteswritten = connections[fileno].send(responses[fileno])
-                        responses[fileno] = responses[fileno][byteswritten:]
-                        if len(responses[fileno]) == 0:
-                            self.epoll.modify(fileno, 0)
-                            connections[fileno].shutdown(socket.SHUT_RDWR)
-                    elif event & select.EPOLLHUP:
-                        self.epoll.unregister(fileno)
-                        connections[fileno].close()
-                        del connections[fileno]
-        finally:
-            self.epoll.unregister(self.sock.fileno())
-            self.epoll.close()
-            self.sock.close()
+        while True:
+            try:
+                message = diesel.until_eol()
+                your_message = ': '.join(['You said', message])
+                diesel.send(your_message)
+            except Exception as e:
+                print("Exception:",e)
+def main(server_port):
+    app = diesel.Application()
+    server = EchoServer()
+    app.add_service(diesel.Service(server.handler, server_port))
+    app.run()
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Socket Server Example with Epoll')
+    parser = argparse.ArgumentParser(description='Echo server example with Diesel')
     parser.add_argument('--port', action="store", dest="port", type=int, required=True)
     given_args = parser.parse_args()
     port = given_args.port
-    server = EpollServer(host=SERVER_HOST, port=port)
-    server.run()
+    main(port)
