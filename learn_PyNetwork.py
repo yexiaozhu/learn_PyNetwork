@@ -2,59 +2,43 @@
 #-*- coding=utf-8 -*-
 #author="yexiaozhu"
 
-import argparse
+import sys
 import socket
-import errno
-from time import time as now
+import fcntl
+import struct
+import array
 
-DEFAULT_TIMEOUT = 120
-DEFAULT_SERVER_HOST = 'localhost'
-DEFAULT_SERVER_PORT = 80
+SIOCGIFCONF = 0x8912 # from C library sockios.h
+STUCT_SIZE_32 = 32
+STUCT_SIZE_64 = 40
+PLATFORM_32_MAX_NUMBER = 2**32
+DEFAULT_INTERFACES = 8
 
-class NetServiceChecker(object):
-    """ Wait for a network service to come online"""
-    def __init__(self, host, port, timeout=DEFAULT_TIMEOUT):
-        self.host = host
-        self.port = port
-        self.timeout = timeout
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-    def end_wait(self):
-        self.sock.close()
-
-    def check(self):
-        """ Check the service"""
-        if self.timeout:
-            end_time = now() + self.timeout
-
-        while True:
-            try:
-                if self.timeout:
-                    next_timeout = end_time - now()
-                    if next_timeout < 0:
-                        return False
-                    else:
-                        print("setting socket next timeout %ss" %round(next_timeout))
-                        self.sock.settimeout(next_timeout)
-                self.sock.connect((self.host, self.port))
-            # handle exceptions
-            except socket.timeout as err:
-                if self.timeout:
-                    return False
-            except socket.error as err:
-                print("Exception: %s" %err)
-            else: # if all goes well
-                self.end_wait()
-                return True
+def list_interfaces():
+    interfaces = []
+    max_interfacers = DEFAULT_INTERFACES
+    is_64bits = sys.maxsize > PLATFORM_32_MAX_NUMBER
+    struct_size = STUCT_SIZE_64 if is_64bits else STUCT_SIZE_32
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    while True:
+        bytes = max_interfacers * struct_size
+        print bytes
+        interface_names = array.array('B', '\0' * bytes)
+        sock_info = fcntl.ioctl(
+            sock.fileno(),
+            SIOCGIFCONF,
+            struct.pack('iL', bytes, interface_names.buffer_info()[0])
+        )
+        outbytes = struct.unpack('iL', sock_info)[0]
+        if outbytes == bytes:
+            max_interfacers *= 2
+        else:
+            break
+    namestr = interface_names.tostring()
+    for i in range(0, outbytes, struct_size):
+        interfaces.append((namestr[i:i+16].split('\0', 1)[0]))
+    return interfaces
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Wait for Network Service')
-    parser.add_argument('--host', action="store", dest="host", default=DEFAULT_SERVER_HOST)
-    parser.add_argument('--port', action="store", dest="port", type=int, default=DEFAULT_SERVER_PORT)
-    parser.add_argument('--timeout', action="store", dest="timeout", type=int, default=DEFAULT_TIMEOUT)
-    given_args = parser.parse_args()
-    host, port, timeout = given_args.host, given_args.port, given_args.timeout
-    service_checker = NetServiceChecker(host, port, timeout=timeout)
-    print("Checking for network service %s:%s ..." %(host, port))
-    if service_checker.check():
-        print("Service is available again!")
+    interfaces = list_interfaces()
+    print "This machine has %s network interfaces: %s." %(len(interfaces), interfaces)
