@@ -3,27 +3,37 @@
 #author="yexiaozhu"
 
 import argparse
-import socket
-import fcntl
-import struct
-import nmap
+import time
+import sched
+from scapy.all import sr, srp, IP, UDP, ICMP, TCP, ARP, Ether
+RUN_PREQUENCY = 10
+scheduler = sched.scheduler(time.time, time.sleep)
+def detect_inactive_hosts(scan_hosts):
+    """
+    Scans the network to find scan_hosts are live or dead
+    scan_hosts can be like 10.0.2.2-4 to cover range
+    See Scapy docs for specifying targets.
+    :param scan_hosts:
+    :return:
+    """
+    global scheduler
+    scheduler.enter(RUN_PREQUENCY, 1, detect_inactive_hosts, (scan_hosts, ))
+    inactive_hosts = []
+    try:
+        ans, unans = sr(IP(dst=scan_hosts)/ICMP(), retry=0, timeout=1)
+        ans.summary(lambda (s,r) : r.sprintf("%IP.src% is alive"))
+        for inactive in unans:
+            print "%s is inactive" %inactive.dst
+            inactive_hosts.append(inactive.dst)
 
-SAMPLE_PORTS = '21-23'
+        print "Total %d hosts are inactive" %(len(inactive_hosts))
+    except KeyboardInterrupt:
+        exit(0)
 
-def get_interface_status(ifname):
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    ip_address = socket.inet_ntoa(fcntl.ioctl(
-        sock.fileno(),
-        0x8915, #SIOCGIFADDR, C socket library sockios.h
-        struct.pack('256s', ifname[:15])
-    )[20:24])
-    nm = nmap.PortScanner()
-    nm.scan(ip_address, SAMPLE_PORTS)
-    return nm[ip_address].state()
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Python networking utils')
-    parser.add_argument('--ifname', action="store", dest="ifname", required=True)
+    parser.add_argument('--scan-hosts', action="store", dest="scan_hosts", required=True)
     given_args = parser.parse_args()
-    ifname = given_args.ifname
-    print "Interface [%s] is: %s" % (ifname, get_interface_status(ifname))
+    scan_hosts = given_args.scan_hosts
+    scheduler.enter(1, 1, detect_inactive_hosts, (scan_hosts, ))
+    scheduler.run()
