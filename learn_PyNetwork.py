@@ -2,38 +2,31 @@
 #-*- coding=utf-8 -*-
 #author="yexiaozhu"
 
-import argparse
-import time
-import sched
-from scapy.all import sr, srp, IP, UDP, ICMP, TCP, ARP, Ether
-RUN_PREQUENCY = 10
-scheduler = sched.scheduler(time.time, time.sleep)
-def detect_inactive_hosts(scan_hosts):
-    """
-    Scans the network to find scan_hosts are live or dead
-    scan_hosts can be like 10.0.2.2-4 to cover range
-    See Scapy docs for specifying targets.
-    :param scan_hosts:
-    :return:
-    """
-    global scheduler
-    scheduler.enter(RUN_PREQUENCY, 1, detect_inactive_hosts, (scan_hosts, ))
-    inactive_hosts = []
+import socket
+import os
+
+BUFSIZE = 1024
+
+def test_socketpair():
+    """ Test Unix socketpair """
+    parent, child = socket.socketpair()
+    pid = os.fork()
     try:
-        ans, unans = sr(IP(dst=scan_hosts)/ICMP(), retry=0, timeout=1)
-        ans.summary(lambda (s,r) : r.sprintf("%IP.src% is alive"))
-        for inactive in unans:
-            print "%s is inactive" %inactive.dst
-            inactive_hosts.append(inactive.dst)
-
-        print "Total %d hosts are inactive" %(len(inactive_hosts))
-    except KeyboardInterrupt:
-        exit(0)
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Python networking utils')
-    parser.add_argument('--scan-hosts', action="store", dest="scan_hosts", required=True)
-    given_args = parser.parse_args()
-    scan_hosts = given_args.scan_hosts
-    scheduler.enter(1, 1, detect_inactive_hosts, (scan_hosts, ))
-    scheduler.run()
+        if pid:
+            print "@Parent, sending message..."
+            child.close()
+            parent.sendall("Hello from parent!")
+            response = parent.recv(BUFSIZE)
+            print "Response from child:", response
+            parent.close()
+        else:
+            print "@Child, waiting for message from parent"
+            parent.close()
+            message = child.recv(BUFSIZE)
+            print "Message from parent:", message
+            child.sendall("Hello from child!")
+            child.close()
+    except Exception, err:
+        print "Error: %s" %err
+if __name__ == '__main__':
+    test_socketpair()
