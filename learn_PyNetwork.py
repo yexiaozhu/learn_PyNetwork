@@ -7,28 +7,38 @@ import argparse
 import netifaces as ni
 import netaddr as na
 
-def extract_ipv6_info():
-    """ Extracts IPv6 information"""
-    print "IPV6 support built into Python: %s" %socket.has_ipv6
-    for interface in ni.interfaces():
-        all_addresses = ni.ifaddresses(interface)
-        print "Interface %s:" %interface
-        for family,addrs in all_addresses.iteritems():
-            fam_name = ni.address_families[family]
-            print 'Address family: %s' %fam_name
-            for addr in addrs:
-                if fam_name == 'AF_INET6':
-                    addr = addr['addr']
-                    has_eth_string = addr.split("%eth")
-                    if has_eth_string:
-                        addr = addr.split("%ens")[0]
-                        # addr = addr.split("%eth")[0]
-                        # print '1', addr
-                    print "    IP Address: %s" %na.IPNetwork(addr)
-                    print "    IP Version: %s" %na.IPNetwork(addr).version
-                    print "    IP Prefix length: %s" %na.IPNetwork(addr).prefixlen
-                    print "    Network: %s" %na.IPNetwork(addr).network
-                    print "    Broadcast: %s" %na.IPNetwork(addr).broadcast
+HOST = 'localhost'
 
+def echo_server(port, host=HOST):
+    """Echo server using IPv6 """
+    for result in socket.getaddrinfo(host, port, socket.AF_UNSPEC, socket.SOCK_STREAM, 0, socket.AI_PASSIVE):
+        af, socktype, proto, canonname, sa = result
+        try:
+            sock = socket.socket(af, socktype, proto)
+        except socket.error, err:
+            print "Error: %s" %err
+
+        try:
+            sock.bind(sa)
+            sock.listen(1)
+            print "Server listening on %s:%s" %(host, port)
+        except socket.error, msg:
+            sock.close()
+            continue
+        break
+        sys.exit(1)
+    conn, addr = sock.accept()
+    print 'Connected to', addr
+    while True:
+        data = conn.recv(1024)
+        print "Received data from the client: [%s]" %data
+        if not data: break
+        conn.send(data)
+        print "Sent data echoed back to the client: [%s]" %data
+    conn.close()
 if __name__ == '__main__':
-    extract_ipv6_info()
+    parser = argparse.ArgumentParser(description='IPv6 Socket Server Example')
+    parser.add_argument('--port', action="store", dest="port", type=int, required=True)
+    given_args = parser.parse_args()
+    port = given_args.port
+    echo_server(port)

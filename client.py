@@ -4,37 +4,43 @@
 
 import socket
 import sys
+import argparse
 
-SERVER_PATH = "/tmp/python_unix_socket_server"
+HOST = 'localhost'
+BUFSIZE = 1024
 
-def run_unix_domain_socket_client():
-    """ Run a Unix damain socket client """
-    sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
-
-    # Connect the socket to the path where the server is listening
-    server_address = SERVER_PATH
-    print "connecting to %s" %server_address
-    try:
-        sock.connect(server_address)
-    except socket.error, msg:
-        print >>sys.stderr, msg
+def ipv6_echo_client(port, host=HOST):
+    for res in socket.getaddrinfo(host, port, socket.AF_UNSPEC, socket.SOCK_STREAM):
+        af, socktype, proto, canonname, sa = res
+        try:
+            sock = socket.socket(af, socktype, proto)
+        except socket.error, err:
+            print "Error:%s" %err
+        try:
+            sock.connect(sa)
+        except socket.error, msg:
+            sock.close()
+            continue
+    if sock is None:
+        print  'Failed to open socktt!'
         sys.exit(1)
+    msg = "Hello from ipv6 client"
+    print "Send data to server: %s" %msg
+    sock.send(msg)
+    while True:
+        data = sock.recv(BUFSIZE)
+        print 'Received from server', repr(data)
+        if not data:
+            break
+    sock.close()
 
-    try:
-        message = "This is the message. This will be echoed back!"
-        print "Sending [%s]" %message
-        sock.sendall(message)
-        amount_received = 0
-        amount_excepted = len(message)
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='IPv6 socket client example')
+    parser.add_argument('--port', action="store", dest="port", type=int,required=True)
+    given_args = parser.parse_args()
+    port = given_args.port
+    ipv6_echo_client(port)
 
-        while amount_received < amount_excepted:
-            data = sock.recv(16)
-            amount_received += len(data)
-            print >>sys.stderr, "Received [%s]" %data
-
-    finally:
-        print "Closing client"
-        sock.close()
 
 if __name__ == '__main__':
     run_unix_domain_socket_client()
