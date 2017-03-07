@@ -4,29 +4,31 @@
 
 import socket
 import os
+import time
 
-BUFSIZE = 1024
+SERVER_PATH = "/tmp/python_unix_socket_server"
 
-def test_socketpair():
-    """ Test Unix socketpair """
-    parent, child = socket.socketpair()
-    pid = os.fork()
-    try:
-        if pid:
-            print "@Parent, sending message..."
-            child.close()
-            parent.sendall("Hello from parent!")
-            response = parent.recv(BUFSIZE)
-            print "Response from child:", response
-            parent.close()
+def run_unix_domin_socket_server():
+    if os.path.exists(SERVER_PATH):
+        os.remove(SERVER_PATH)
+    print "starting unix domain socket server."
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+    server.bind(SERVER_PATH)
+
+    print "Listening on path: %s" %SERVER_PATH
+    while True:
+        datagram = server.recv(1024)
+        if not datagram:
+            break
         else:
-            print "@Child, waiting for message from parent"
-            parent.close()
-            message = child.recv(BUFSIZE)
-            print "Message from parent:", message
-            child.sendall("Hello from child!")
-            child.close()
-    except Exception, err:
-        print "Error: %s" %err
+            print "-" * 20
+            print datagram
+        if "DONE" == datagram:
+            break
+    print "-" * 20
+    print "Server is shuting down now..."
+    server.close()
+    os.remove(SERVER_PATH)
+    print "Server shutdown and path removed."
 if __name__ == '__main__':
-    test_socketpair()
+    run_unix_domin_socket_server()
