@@ -3,32 +3,34 @@
 #author="yexiaozhu"
 
 import socket
-import os
-import time
+import argparse
+import netifaces as ni
 
-SERVER_PATH = "/tmp/python_unix_socket_server"
+def inspect_ipv6_support():
+    """ Find the ipv6 address """
+    print "IPV6 support built into Python: %s" %socket.has_ipv6
 
-def run_unix_domin_socket_server():
-    if os.path.exists(SERVER_PATH):
-        os.remove(SERVER_PATH)
-    print "starting unix domain socket server."
-    server = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
-    server.bind(SERVER_PATH)
+    ipv6_addr = {}
+    for interface in ni.interfaces():
+        all_addresses = ni.ifaddresses(interface)
+        print "Interface %s:" %interface
+        for family, addrs in all_addresses.iteritems():
+            fam_name = ni.address_families[family]
+            print 'Address family: %s' %fam_name
+            for addr in addrs:
+                if fam_name == 'AF_INET6':
+                    ipv6_addr[interface] = addr['addr']
+                print 'Address : %s' %addr['addr']
+                nmask = addr.get('netmask', None)
+                if nmask:
+                    print 'Netmask : %s' %nmask
+                bcast = addr.get('broadcast', None)
+                if bcast:
+                    print 'Broadcast: %s' %bcast
+    if ipv6_addr:
+        print "Found IPv6 address: %s" %ipv6_addr
+    else:
+        print "No IPv6 interface found!"
 
-    print "Listening on path: %s" %SERVER_PATH
-    while True:
-        datagram = server.recv(1024)
-        if not datagram:
-            break
-        else:
-            print "-" * 20
-            print datagram
-        if "DONE" == datagram:
-            break
-    print "-" * 20
-    print "Server is shuting down now..."
-    server.close()
-    os.remove(SERVER_PATH)
-    print "Server shutdown and path removed."
 if __name__ == '__main__':
-    run_unix_domin_socket_server()
+    inspect_ipv6_support()
