@@ -2,46 +2,47 @@
 #coding=utf-8
 #author="yexiaozhu"
 
-import argparse
-import sys
-from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
+import cookielib
+import urllib
+import urllib2
 
-DEFAULT_HOST = '127.0.0.1'
-DEFAULT_PORT = 8800
+ID_USERNAME = 'id_username'
+ID_PASSWORD = 'id_password'
+USERNAME = '557703988@139.com'
+PASSWORD = 'wang051206git'
+LOGIN_URL = 'https://github.com/login'
+NORMAL_URL = 'https://github.com/'
+headers={
+        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/34.0.1847.137 Safari/537.36 LBBROWSER'
+        }
+def extract_cookie_info():
+    """ Fake login to a site with cookie """
+    # setuo cookie jar
+    cj = cookielib.CookieJar()
+    # print cj
+    login_data = urllib.urlencode({ID_USERNAME: USERNAME,
+                                   ID_PASSWORD: PASSWORD})
+    # create url opener
+    opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
+    # opener.addheaders = headers
+    # urllib2.install_opener(opener)
+    # opener = urllib2.build_opener(headers)
+    # urllib2.install_opener(opener)
+    # resp = opener.open(LOGIN_URL, login_data)
+    resp = urllib2.Request(LOGIN_URL, login_data, headers)
 
-class RequestHandler(BaseHTTPRequestHandler):
-    """ Custom request handler"""
+    # send login info
+    for cookie in cj:
+        print "----First time cookie: %s --> %s" %(cookie.name, cookie.value)
 
-    def do_GET(self):
-        """ Handler for the GET requests """
-        self.send_response(200)
-        self.send_header('Content-type', 'text/html')
-        self.end_headers()
-        # Send the message to browser
-        self.wfile.write('Hello from server!')
-        return
+    print "Headers: %s" %resp.headers
 
-class CustomHTTPServer(HTTPServer):
-    "A custom HTTP server"
-    def __init__(self, host, port):
-        server_address = (host, port)
-        HTTPServer.__init__(self, server_address, RequestHandler)
+    # now acess without any login info
+    resp = opener.open(NORMAL_URL)
+    for cookie in cj:
+        print "++++Second time cookie: %s --> %s" %(cookie.name, cookie.value)
 
-def run_server(port):
-    try:
-        server = CustomHTTPServer(DEFAULT_HOST, port)
-        print "Custom HTTP server started on port: %s" % port
-        print "Custom HTTP server started on host: %s" % DEFAULT_HOST
-        server.serve_forever()
-    except Exception, err:
-        print "Error:%s" %err
-    except KeyboardInterrupt:
-        print "Server interrupted and is shutting down..."
-        server.socket.close()
+    print "Header: %s" %resp.headers
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Simple HTTP Server Example')
-    parser.add_argument('--port', action="store", dest="port", type=int, default=DEFAULT_PORT)
-    given_args = parser.parse_args()
-    port = given_args.port
-    run_server(port)
+if __name__ == '__main__':
+    extract_cookie_info()
