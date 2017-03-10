@@ -3,42 +3,45 @@
 #author="yexiaozhu"
 
 import argparse
-import httplib
+import sys
+from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
 
-REMOTE_SERVER_HOST = 'www.python.org'
-REMOTE_SERVER_PATH = '/'
+DEFAULT_HOST = '127.0.0.1'
+DEFAULT_PORT = 8800
 
-class HTTPClient:
+class RequestHandler(BaseHTTPRequestHandler):
+    """ Custom request handler"""
 
-    def __init__(self, host):
-        self.host = host
+    def do_GET(self):
+        """ Handler for the GET requests """
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+        # Send the message to browser
+        self.wfile.write('Hello from server!')
+        return
 
-    def fetch(self, path):
-        http = httplib.HTTP(self.host)
+class CustomHTTPServer(HTTPServer):
+    "A custom HTTP server"
+    def __init__(self, host, port):
+        server_address = (host, port)
+        HTTPServer.__init__(self, server_address, RequestHandler)
 
-        # Prepare header
-        http.putrequest("GET", path)
-        http.putheader("User-Agent", __file__)
-        http.putheader("Host", self.host)
-        http.putheader("Accept", "*/*")
-        http.endheaders()
-
-        try:
-            errcode, errmsg, headers = http.getreply()
-        except Exception, e:
-            print "Client failed error code: %s message: %s headers: %s" %(errcode, errmsg, headers)
-        else:
-            print "Got homepage from %s" % self.host
-
-        file = http.getfile()
-        # print file.read()
-        return file.read()
+def run_server(port):
+    try:
+        server = CustomHTTPServer(DEFAULT_HOST, port)
+        print "Custom HTTP server started on port: %s" % port
+        print "Custom HTTP server started on host: %s" % DEFAULT_HOST
+        server.serve_forever()
+    except Exception, err:
+        print "Error:%s" %err
+    except KeyboardInterrupt:
+        print "Server interrupted and is shutting down..."
+        server.socket.close()
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='HTTP Client Example')
-    parser.add_argument('--host', action="store", dest="host", default=REMOTE_SERVER_HOST)
-    parser.add_argument('--path', action="store", dest="path", default=REMOTE_SERVER_PATH)
+    parser = argparse.ArgumentParser(description='Simple HTTP Server Example')
+    parser.add_argument('--port', action="store", dest="port", type=int, default=DEFAULT_PORT)
     given_args = parser.parse_args()
-    host, path = given_args.host, given_args.path
-    client = HTTPClient(host)
-    print client.fetch(path)
+    port = given_args.port
+    run_server(port)
