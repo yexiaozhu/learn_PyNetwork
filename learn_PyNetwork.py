@@ -8,8 +8,8 @@ import urllib2
 
 ID_USERNAME = 'id_username'
 ID_PASSWORD = 'id_password'
-USERNAME = '557703988@139.com'
-PASSWORD = 'wang051206git'
+USERNAME = 'XXXXXX'
+PASSWORD = 'XXXXXX'
 LOGIN_URL = 'https://github.com/login'
 NORMAL_URL = 'https://github.com/'
 headers={
