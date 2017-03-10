@@ -1,44 +1,44 @@
-#!/usr/bin/env python3
-#-*- coding=utf-8 -*-
+#!/usr/bin/env python2.7.12
+#coding=utf-8
 #author="yexiaozhu"
 
-import socket
 import argparse
-import netifaces as ni
-import netaddr as na
+import httplib
 
-HOST = 'localhost'
+REMOTE_SERVER_HOST = 'www.python.org'
+REMOTE_SERVER_PATH = '/'
 
-def echo_server(port, host=HOST):
-    """Echo server using IPv6 """
-    for result in socket.getaddrinfo(host, port, socket.AF_UNSPEC, socket.SOCK_STREAM, 0, socket.AI_PASSIVE):
-        af, socktype, proto, canonname, sa = result
+class HTTPClient:
+
+    def __init__(self, host):
+        self.host = host
+
+    def fetch(self, path):
+        http = httplib.HTTP(self.host)
+
+        # Prepare header
+        http.putrequest("GET", path)
+        http.putheader("User-Agent", __file__)
+        http.putheader("Host", self.host)
+        http.putheader("Accept", "*/*")
+        http.endheaders()
+
         try:
-            sock = socket.socket(af, socktype, proto)
-        except socket.error, err:
-            print "Error: %s" %err
+            errcode, errmsg, headers = http.getreply()
+        except Exception, e:
+            print "Client failed error code: %s message: %s headers: %s" %(errcode, errmsg, headers)
+        else:
+            print "Got homepage from %s" % self.host
 
-        try:
-            sock.bind(sa)
-            sock.listen(1)
-            print "Server listening on %s:%s" %(host, port)
-        except socket.error, msg:
-            sock.close()
-            continue
-        break
-        sys.exit(1)
-    conn, addr = sock.accept()
-    print 'Connected to', addr
-    while True:
-        data = conn.recv(1024)
-        print "Received data from the client: [%s]" %data
-        if not data: break
-        conn.send(data)
-        print "Sent data echoed back to the client: [%s]" %data
-    conn.close()
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='IPv6 Socket Server Example')
-    parser.add_argument('--port', action="store", dest="port", type=int, required=True)
+        file = http.getfile()
+        # print file.read()
+        return file.read()
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='HTTP Client Example')
+    parser.add_argument('--host', action="store", dest="host", default=REMOTE_SERVER_HOST)
+    parser.add_argument('--path', action="store", dest="path", default=REMOTE_SERVER_PATH)
     given_args = parser.parse_args()
-    port = given_args.port
-    echo_server(port)
+    host, path = given_args.host, given_args.path
+    client = HTTPClient(host)
+    print client.fetch(path)
