@@ -2,51 +2,49 @@
 #coding=utf-8
 #author="yexiaozhu"
 
-import argparse
-import string
+import urllib
 import os
-import sys
-import gzip
-import cStringIO
-from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
 
-DEFAULT_HOST = '127.0.0.1'
-DEFAULT_PORT = 8800
-HTML_CONTENT = """<html><body><h1>Compressed Hello World!</h1></body></html>"""
+TARGET_URL = 'http://python.org/ftp/python/2.7.12/'
+TARGET_FILE = 'Python-2.7.12.tgz'
 
-class RequestHandler(BaseHTTPRequestHandler):
-    """ Custom request handler """
+class CustomURLOpener(urllib.FancyURLopener):
+    """Override FancyURLopener to skip error 206 (when a partial file is being sent)"""
+    def http_error_206(self, url, fp, errcode, errmsg, headers, data=None):
+        pass
 
-    def do_GET(self):
-        """ Handler for the GET requests """
-        self.send_response(200)
-        self.send_header('Content-type', 'text/html')
-        self.send_header('Content-Encoding', 'gzip')
-        zbuf = self.compress_buffer(HTML_CONTENT)
-        sys.stdout.write("Content-Encoding: gzip\r\n")
-        self.send_header('Content-Length', len(zbuf))
-        self.end_headers()
+def resume_download():
+    file_exists = False
+    CustomURLClass = CustomURLOpener()
+    if os.path.exists(TARGET_FILE):
+        out_file = open(TARGET_FILE, 'ab')
+        file_exists = os.path.getsize(TARGET_FILE)
+        # If the file exists, then only download the unfinished part
+        CustomURLClass.addheaders("range", "bytes=%s-" % (file_exists))
+    else:
+        out_file = open(TARGET_FILE, 'wb')
 
-        # Send the message to browser
-        zbuf = self.compress_buffer(HTML_CONTENT)
-        sys.stdout.write("Content-Encoding: gzip\r\n")
-        sys.stdout.write("Content-Length: %d\r\n" % (len(zbuf)))
-        sys.stdout.write("\r\n")
-        self.wfile.write(zbuf)
-        return
+    web_page = CustomURLClass.open(TARGET_URL + TARGET_FILE)
 
-    def compress_buffer(self, buf):
-        zbuf = cStringIO.StringIO()
-        zfile = gzip.GzipFile(mode = 'wb', fileobj = zbuf, compresslevel= 6)
-        zfile.write(buf)
-        zfile.close()
-        return zbuf.getvalue()
+    # Check if last download was OK
+    if int(web_page.headers['Content-Length']) == file_exists:
+        loop = 0
+        print "File already download!"
+
+    byte_count = 0
+    while True:
+        data = web_page.read(8192)
+        if not data:
+            break
+        out_file.write(data)
+        byte_count = byte_count + len(data)
+
+    web_page.close()
+    out_file.close()
+
+    for k, v in web_page.headers.items():
+        print k, "=", v
+    print "File copied", byte_count, "bytes from", web_page.url
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Simple HTTP Server EXample')
-    parser.add_argument('--port', action="store", dest="port", type=int, default=DEFAULT_PORT)
-    given_args = parser.parse_args()
-    port = given_args.port
-    server_address = (DEFAULT_HOST, port)
-    server = HTTPServer(server_address, RequestHandler)
-    server.serve_forever()
+    resume_download()
