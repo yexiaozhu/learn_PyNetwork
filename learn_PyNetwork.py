@@ -2,32 +2,18 @@
 #coding=utf-8
 #author="yexiaozhu"
 
-import argparse
-import httplib
-import urlparse
-import re
-import urllib
+import urllib2
 
-DEFAULT_URL = 'http://www.python.org'
-HTTP_GOOD_CODES = [httplib.OK, httplib.FOUND, httplib.MOVED_PERMANENTLY]
+BROWSER = 'Mozilla/5.0 (Windows NT 5.1; rv:20.0) Gecko/20100101 Firefox/20.0'
+URL = 'http://www.python.org'
 
-def get_server_status_code(url):
-    """ Download just the header of a URL and return the server's status code. """
-    host, path = urlparse.urlparse(url)[1:3]
-    try:
-        conn = httplib.HTTPConnection(host)
-        conn.request('HEAD', path)
-        return conn.getresponse().status
-    except StandardError:
-        return None
+def spoof_firefox():
+    opener = urllib2.build_opener()
+    opener.addheaders = [('User-agent', BROWSER)]
+    result = opener.open(URL)
+    print "Response headers:"
+    for header in result.headers.headers:
+        print "\t", header
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Example HEAD Request')
-    parser.add_argument('--url', action="store", dest="url", default=DEFAULT_URL)
-    given_args = parser.parse_args()
-    url = given_args.url
-    if get_server_status_code(url) in HTTP_GOOD_CODES:
-        # print get_server_status_code(url)
-        print "Server: %s status is OK: " %url
-    else:
-        print "Server: %s status is NOT OK! " %url
+    spoof_firefox()
