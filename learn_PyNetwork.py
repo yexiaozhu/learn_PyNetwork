@@ -2,49 +2,35 @@
 #coding=utf-8
 #author="yexiaozhu"
 
-import urllib
-import os
+import socket, os
+from SocketServer import BaseServer
+from BaseHTTPServer import HTTPServer
+from SimpleHTTPServer import SimpleHTTPRequestHandler
+from OpenSSL import SSL
 
-TARGET_URL = 'http://python.org/ftp/python/2.7.12/'
-TARGET_FILE = 'Python-2.7.12.tgz'
+class SecureHTTPServer(HTTPServer):
+    def __init__(self, server_address, HandlerClass):
+        BaseServer.__init__(self, server_address, HandlerClass)
+        ctx = SSL.Context(SSL.SSLv23_METHOD)
+        fpem = 'server.pem' # location of the server private key and the server certificate
+        ctx.use_privatekey_file (fpem)
+        ctx.use_certificate_file(fpem)
+        self.socket = SSL.Connection(ctx, socket.socket(self.address_family, self.socket_type))
+        self.server_bind()
+        self.server_activate()
 
-class CustomURLOpener(urllib.FancyURLopener):
-    """Override FancyURLopener to skip error 206 (when a partial file is being sent)"""
-    def http_error_206(self, url, fp, errcode, errmsg, headers, data=None):
-        pass
+class SecureHTTPRequestHandler(SimpleHTTPRequestHandler):
+    def setup(self):
+        self.connection = self.request
+        self.rfile = socket._fileobject(self.request, "rb", self.rbufsize)
+        self.wfile = socket._fileobject(self.request, "wb", self.wbufsize)
 
-def resume_download():
-    file_exists = False
-    CustomURLClass = CustomURLOpener()
-    if os.path.exists(TARGET_FILE):
-        out_file = open(TARGET_FILE, 'ab')
-        file_exists = os.path.getsize(TARGET_FILE)
-        # If the file exists, then only download the unfinished part
-        CustomURLClass.addheaders("range", "bytes=%s-" % (file_exists))
-    else:
-        out_file = open(TARGET_FILE, 'wb')
-
-    web_page = CustomURLClass.open(TARGET_URL + TARGET_FILE)
-
-    # Check if last download was OK
-    if int(web_page.headers['Content-Length']) == file_exists:
-        loop = 0
-        print "File already download!"
-
-    byte_count = 0
-    while True:
-        data = web_page.read(8192)
-        if not data:
-            break
-        out_file.write(data)
-        byte_count = byte_count + len(data)
-
-    web_page.close()
-    out_file.close()
-
-    for k, v in web_page.headers.items():
-        print k, "=", v
-    print "File copied", byte_count, "bytes from", web_page.url
+def run_server(HandlerClass = SecureHTTPRequestHandler, ServerClass = SecureHTTPServer):
+    server_address = ('', 4443) # port needs to be accessible by user
+    server = ServerClass(server_address, HandlerClass)
+    running_address = server.socket.getsockname()
+    print "Serving HTTPS Server on %s:%s ..." %(running_address[0], running_address[1])
+    server.serve_forever()
 
 if __name__ == '__main__':
-    resume_download()
+    run_server()
