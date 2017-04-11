@@ -2,26 +2,16 @@
 #coding=utf-8
 #author="yexiaozhu"
 
-import argparse
-import getpass
-import os
-import cgi
-import BaseHTTPServer
-import CGIHTTPServer
-import cgitb
-cgitb.enable() # enable CGI error reporting
+from pygeocoder import Geocoder
 
-def web_server(port):
-    server = BaseHTTPServer.HTTPServer
-    handler = CGIHTTPServer.CGIHTTPRequestHandler # RequestsHandler
-    server_address = ("", port)
-    handler.cgi_directories = ["/cgi-bin", ]
-    httpd = server(server_address, handler)
-    print "Starting web server with CGI support on port: %s ..." %port
-    httpd.serve_forever()
+def search_business(business_name):
+    results = Geocoder.geocode(business_name)
+    # print results
+    # print results[0].coordinates
+    for result in results:
+        print result
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='CGI Server Example')
-    parser.add_argument('--port', action='store', dest='port', type=int, required=True)
-    given_args = parser.parse_args()
-    web_server(given_args.port)
+    business_name = "Tian'anmen, Beijing"
+    print "Searching %s" %business_name
+    search_business(business_name)
