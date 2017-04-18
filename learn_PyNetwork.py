@@ -2,16 +2,34 @@
 #coding=utf-8
 #author="yexiaozhu"
 
-from pygeocoder import Geocoder
+import argparse
+import os
+import urllib
 
-def search_business(business_name):
-    results = Geocoder.geocode(business_name)
-    # print results
-    # print results[0].coordinates
-    for result in results:
-        print result
+ERROR_STRING = '<error>'
+
+def find_lat_long(city):
+    """ Find geographic coordinates """
+    # Encode query string into Google maps URL
+    url = 'http://maps.google.com/?q=' + urllib.quote(city) + '&output=js'
+    print 'Query: %s' % (url)
+
+    # Get XML location from Google maps
+    xml = urllib.urlopen(url).read()
+    if ERROR_STRING in xml:
+        print '\nGoogle cannot interpret the city.'
+        return
+    else:
+        # Strip lat/long coordinates from XML
+        lat,lng = 0.0,0.0
+        center = xml[xml.find('{center')+10:xml.find('}',xml.find('{center'))]
+        center = center.replace('lat:','').replace('lng:','')
+        lat,lng = center.split(',')
+    print "Latitude/Longitude: %s/%s\n" %(lat, lng)
 
 if __name__ == '__main__':
-    business_name = "Tian'anmen, Beijing"
-    print "Searching %s" %business_name
-    search_business(business_name)
+    parser = argparse.ArgumentParser(description='City Geocode Search')
+    parser.add_argument('--city', action="store", dest="city", required=True)
+    given_args = parser.parse_args()
+    print "Finding geographic coordinates of %s" %given_args.city
+    find_lat_long(given_args.city)
