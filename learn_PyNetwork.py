@@ -3,33 +3,74 @@
 #author="yexiaozhu"
 
 import argparse
-import os
+import re
+import yaml
 import urllib
+import urllib2
 
-ERROR_STRING = '<error>'
+SEARCH_URL = 'https://%s.wikipedia.org/w/api.php?action=query' \
+             '&list=search&srsearch=%s&sroffset=%d&srlimit=%d&format=json'
 
-def find_lat_long(city):
-    """ Find geographic coordinates """
-    # Encode query string into Google maps URL
-    url = 'http://maps.google.com/?q=' + urllib.quote(city) + '&output=js'
-    print 'Query: %s' % (url)
+class Wikipedia:
 
-    # Get XML location from Google maps
-    xml = urllib.urlopen(url).read()
-    if ERROR_STRING in xml:
-        print '\nGoogle cannot interpret the city.'
-        return
-    else:
-        # Strip lat/long coordinates from XML
-        lat,lng = 0.0,0.0
-        center = xml[xml.find('{center')+10:xml.find('}',xml.find('{center'))]
-        center = center.replace('lat:','').replace('lng:','')
-        lat,lng = center.split(',')
-    print "Latitude/Longitude: %s/%s\n" %(lat, lng)
+    def __init__(self, lang='en'):
+        self.lang = lang
+
+    def _get_content(self, url):
+        request = urllib2.Request(url)
+        request.add_header('User-Agent', 'Mozilla/20.0')
+
+        try:
+            result = urllib2.urlopen(request)
+        except urllib2.HTTPError, e:
+            print "HTTP Error: %s" %(e.reason)
+        except Exception, e:
+            print "Error occured: %s" %str(e)
+        return result
+
+    def search_content(self, query, page=1, limit=10):
+        offset = (page - 1) * limit
+        # print 'offset:', type(offset)
+        # print 'limit:', limit
+        # print 'limit:', type(limit)
+        url = SEARCH_URL % (self.lang, urllib.quote_plus(query), offset, limit)
+        print url
+        content = self._get_content(url).read()
+        # print 'content:', content
+        # print 'content:', type(content)
+        content = content.replace('\t', '    ')
+        parsed = yaml.load(content)
+        # print parsed
+        search = parsed['query']['search']
+        # print search
+        if not search:
+            return
+
+        results = []
+        for article in search:
+            snippet = article['snippet']
+            snippet = re.sub(r'(?m)<.*?>', '', snippet)
+            snippet = re.sub(r'\s+', ' ', snippet)
+            snippet = snippet.replace(' . ', '. ')
+            snippet = snippet.replace(' , ', ', ')
+            snippet = snippet.strip()
+
+            results.append({
+                'title' : article['title'].strip(),
+                'snippet' : snippet
+            })
+
+        return results
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='City Geocode Search')
-    parser.add_argument('--city', action="store", dest="city", required=True)
+    parser = argparse.ArgumentParser(description='Wikipedia search')
+    parser.add_argument('--query', action="store", dest="query", required=True)
     given_args = parser.parse_args()
-    print "Finding geographic coordinates of %s" %given_args.city
-    find_lat_long(given_args.city)
+    wikipedia = Wikipedia()
+    search_term = given_args.query
+    print "Searching Wikipedia for %s" % search_term
+    results = wikipedia.search_content(search_term)
+    print "Listing %s search results..." % len(results)
+    for result in results:
+        print "==%s== \n %s" %(result['title'], result['snippet'])
+    print "---- End of search results ----"
