@@ -24,7 +24,7 @@ def download_file():
 def upload_file():
     print "Checking remote disk space..."
     run("df -h")
-    local_path = prompt("Enter the remote file path:")
-    remote_path = prompt("Enter the local file path:")
+    local_path = prompt("Enter the local file path:")
+    remote_path = prompt("Enter the remote file path:")
     put(remote_path=remote_path, local_path=local_path)
     run("ls %s" %remote_path)
