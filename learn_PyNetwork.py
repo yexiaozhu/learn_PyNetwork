@@ -3,57 +3,28 @@
 #author="yexiaozhu"
 
 from getpass import getpass
-from fabric.api import settings, run, env, prompt, cd
+from fabric.api import settings, run, env, prompt, cd, open_shell, local, get, put
 
 def remote_server():
-    # Edit this list to include remote hosts
     env.hosts = ['127.0.0.1']
-    env.user = prompt('Enter user name: ')
-    env.password = getpass('Enter password: ')
-    env.mysqlhost = 'localhost'
-    env.mysqluser = prompt('Enter your db username: ')
-    env.mysqlpassword = getpass('Enter your db user password: ')
-    env.db_name = ''
+    env.password = getpass('Enter your system password: ')
+    env.home_folder = '/tmp'
 
-def show_dbs():
-    """ Wraps mysql show databases cmd"""
-    q = "show databases"
-    run("echo '%s' | mysql -u%s -p%s" %(q, env.mysqluser, env.mysqlpassword))
+def login():
+    open_shell(command="cd %s" %env.home_folder)
 
-def run_sql(db_name, query):
-    """ Generic function to run sql"""
-    with cd('/home/yezi10'):
-        run("echo '%s' | mysql -u%s -p%s -D%s" %(query, env.mysqluser, env.mysqlpassword, db_name))
+def download_file():
+    print "Checking local disk space..."
+    local("df -h")
+    remote_path = prompt("Enter the remote file path:")
+    local_path = prompt("Enter the local file path:")
+    get(remote_path=remote_path, local_path=local_path)
+    local("ls %s" %local_path)
 
-def create_db():
-    """Create a MYSQL DB for App version"""
-    if not env.db_name:
-        db_name = prompt("Enter the DB name:")
-    else:
-        db_name = env.db_name
-    run('echo "CREATE DATABASE %s default character set utf8 collate utf8_unicode_ci;"|mysql --batch --user=%s --password=%s --host=%s'\
-        % (db_name, env.mysqluser, env.mysqlpassword, env.mysqlhost), pty=True)
-
-def ls_db():
-    """ List a dbs with size in MB"""
-    if not env.db_name:
-        db_name = prompt("Which DB to ls?")
-    else:
-        db_name = env.db_name
-    query = """SELECT table_schema "DB Name",
-        Round(Sum(data_length + index_length) / 1024 / 1024, 1) "DB Size in MB"
-        FROM information_schema.tables
-        WHERE table_schema = \"%s\"
-        GROUP BY table_schema """ %db_name
-    run_sql(db_name, query)
-
-def empty_db():
-    """Empty all tables of a given DB """
-    db_name = prompt("Enter DB name to empty:")
-    cmd = """
-    (echo 'SET foreign_key_checks = 0;';
-    (mysqldump -u%s -p%s --add-drop-table --no-data %s |
-    grep ^DROP);
-    echo 'SET foreign_key_checks = 1;') | \
-    mysql -u%s -p%s -b %s"""%(env.mysqluser, env.mysqlpassword, db_name, env.mysqluser, env.mysqlpassword, db_name)
-    run(cmd)
+def upload_file():
+    print "Checking remote disk space..."
+    run("df -h")
+    local_path = prompt("Enter the remote file path:")
+    remote_path = prompt("Enter the local file path:")
+    put(remote_path=remote_path, local_path=local_path)
+    run("ls %s" %remote_path)
