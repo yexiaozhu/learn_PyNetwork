@@ -3,28 +3,43 @@
 #author="yexiaozhu"
 
 from getpass import getpass
-from fabric.api import settings, run, env, prompt, cd, open_shell, local, get, put
+from fabric.api import settings, run, env, prompt, put, sudo
+from fabric.contrib.files import exists
+
+WWW_DOC_ROOT = "/data/apache/test/"
+WWW_USER = "www-data"
+WWW_GROUP = "www-data"
+APACHE_SITES_PATH = "/etc/apache2/sites-enabled"
+APACHE_INIT_SCRIPT = "etc/init.d/apache2"
 
 def remote_server():
     env.hosts = ['127.0.0.1']
+    env.user = prompt('Enter user name: ')
     env.password = getpass('Enter your system password: ')
-    env.home_folder = '/tmp'
 
-def login():
-    open_shell(command="cd %s" %env.home_folder)
+def setup_vhost():
+    """ Setup a test website """
+    print "Preparing the Apache vhost setup..."
 
-def download_file():
-    print "Checking local disk space..."
-    local("df -h")
-    remote_path = prompt("Enter the remote file path:")
-    local_path = prompt("Enter the local file path:")
-    get(remote_path=remote_path, local_path=local_path)
-    local("ls %s" %local_path)
+    print "Setting up the document root..."
+    if exists(WWW_DOC_ROOT):
+        sudo("rm -rf %s" %WWW_DOC_ROOT)
+    sudo("mkdir -p %s" %WWW_DOC_ROOT)
 
-def upload_file():
-    print "Checking remote disk space..."
-    run("df -h")
-    local_path = prompt("Enter the local file path:")
-    remote_path = prompt("Enter the remote file path:")
-    put(remote_path=remote_path, local_path=local_path)
-    run("ls %s" %remote_path)
+    # setup file permissions
+    sudo("chown -R %s.%s %s" %(env.user, env.user, WWW_DOC_ROOT))
+
+    # upload a sample index.html file
+    put(local_path="index.html", remote_path=WWW_DOC_ROOT)
+    sudo("chown -R %s.%s %s" %(WWW_USER, WWW_GROUP, WWW_DOC_ROOT))
+
+    print "Setting up the vhost..."
+    sudo("chown -R %s.%s %s" %(env.user, env.user, APACHE_SITES_PATH))
+
+    # upload a pre-configured vhost.conf
+    put(local_path="vhost.conf", remote_path=APACHE_SITES_PATH)
+    sudo("chown -R %s.%s %s" % ('root', 'root', APACHE_SITES_PATH))
+
+    # restart Apache to take effect
+    sudo("service apache2 restart")
+    print "Setup complete. Now open the server path http://localhost/ in your web browser"
