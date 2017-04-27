@@ -1,59 +1,20 @@
 import argparse
 import xmlrpclib
-import threading
-from SimpleXMLRPCServer import SimpleXMLRPCServer
 
-# some trivial functions
-def add(x, y):
-    return x+y
-
-def subtract(x, y):
-    return x-y
-
-def multiply(x, y):
-    return x*y
-
-def divide(x, y):
-    return x/y
-
-class ServerThread(threading.Thread):
-    def __init__(self, server_addr):
-        threading.Thread.__init__(self)
-        self.server = SimpleXMLRPCServer(server_addr)
-        self.server.register_multicall_functions()
-        self.server.register_function(add, 'add')
-        self.server.register_function(subtract, 'subtract')
-        self.server.register_function(multiply, 'multiply')
-        self.server.register_function(divide, 'divide')
-
-    def run(self):
-        self.server.serve_forever()
-
-def run_server(host, port):
-    # server code
-    server_addr = (host, port)
-    server = ServerThread(server_addr)
-    server.start() # The server is now running
-    print "Server thread started. Testing the server..."
-
-def run_client(host, port):
-    # client code
-    proxy = xmlrpclib.ServerProxy("http://%s:%s" %(host, port))
-    multicall = xmlrpclib.MultiCall(proxy)
-    multicall.add(7, 3)
-    multicall.subtract(7, 3)
-    multicall.multiply(7, 3)
-    multicall.divide(7, 3)
-    result = multicall()
-    print "7+3=%d, 7-3=%d, 7*3=%d, 7/3=%d" % tuple(result)
+def run_client(host, port, username, password):
+    server = xmlrpclib.ServerProxy('http://%s:%s@%s:%s' %(username, password, host, port, ))
+    msg = "hello server..."
+    print "Sending message to server: %s " %msg
+    print "Got reply: %s" %server.echo(msg)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Multithreaded multicall XMLRPC Server/Proxy')
     parser.add_argument('--host', action="store", dest="host", default='localhost')
-    parser.add_argument('--port', action="store", dest="port", default=8000, type=int)
+    parser.add_argument('--port', action="store", dest="port", default=8003, type=int)
+    parser.add_argument('--username', action="store", dest="username", default='user')
+    parser.add_argument('--password', action="store", dest="password", default='pass')
     # parse arguments
     given_args = parser.parse_args()
     host, port = given_args.host, given_args.port
-    print host, port
-    run_server(host, port)
-    run_client(host, port)
+    username, password = given_args.username, given_args.password
+    run_client(host, port, username, password)
