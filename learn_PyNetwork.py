@@ -2,20 +2,37 @@
 #coding=utf-8
 #author="yexiaozhu"
 
-import SOAPpy
+import argparse
+import json
+import urllib
+import requests
 
-TEST_URL = "http://s3.amazonaws.com/ec2-downloads/2009-04-04.ec2.wsdl"
-# TEST_URL = TEST_URL.decode()
-def list_soap_methods(url):
-    # print type(TEST_URL.decode())
-    proxy = SOAPpy.WSDL.Proxy(url)
-    print '%d methods in WSDL: ' % len(proxy.methods) + '\n'
-    for key in proxy.methods.keys():
-        print "Key Name: %s" %key
-        print "Key Details:"
-        for k,v in proxy.methods[key].__dict__.iteritems():
-            print "%s ==> %s" %(k, v)
-        break
+# BASE_URL = 'http://ajax.googleapis.com/ajax/services/search/web?v=1.0'
+BASE_URL = 'https://developers.google.com/custom-search/'
+
+def get_search_url(query):
+    return "%s&%s" %(BASE_URL, query)
+
+def search_info(tag):
+    query = urllib.urlencode({'q': tag})
+    url = get_search_url(query)
+    response = requests.get(url)
+    print response
+    results = response.json()
+    print results
+
+    data = results['responseData']
+    print data
+    print 'Found total results: %s ' % data['cursor']['estimatedResultCount']
+    hits = data['results']
+    print 'Found top %d hits:' % len(hits)
+    for h in hits:
+        print ' ', h['url']
+    print 'More results avilable from %s' % data['cursor']['moreResultsUrl']
 
 if __name__ == '__main__':
-    list_soap_methods(TEST_URL)
+    parser = argparse.ArgumentParser(description='Search info from Google')
+    parser.add_argument('--tag', action="store", dest="tag", default='Python books')
+    # parse arguments
+    given_args = parser.parse_args()
+    search_info(given_args)
