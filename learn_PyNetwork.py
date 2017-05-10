@@ -2,38 +2,41 @@
 #coding=utf-8
 #author="yexiaozhu"
 
-import argparse
-import pcap
-from construct.examples.protocols.ipstack import  ip_stack
+import os
+from scapy.all import *
 
-def print_packet(pktlen, data, timestamp):
-    """ Callback for printing the packet payload """
-    if not data:
-        return
-    print data
-    stack = ip_stack.parse(data)
-    payload = stack.next.next.next
-    print payload
+pkts = []
+count = 0
+pcapnum = 0
 
-def main():
-    # setup commandline arguments
-    parser = argparse.ArgumentParser(description='Packet Sniffer')
-    parser.add_argument('--iface', action='store', dest='iface', default='eth0')
-    parser.add_argument('--port', action='store', dest='port', default='80', type=int)
-    # parse arguments
-    given_args = parser.parse_args()
-    iface, port = given_args.iface, given_args.port
-    # start sniffing
-    pc = pcap.pcap()
-    pc.open_live(iface, 1600, 0, 100)
-    pc.setfilter('dst port %d' %port)
+def write_cap(x):
+    global pkts
+    global count
+    global pcapnum
+    pkts.append(x)
+    count += 1
+    if count == 3:
+        pcapnum += 1
+        pname = "pcap%d.pcap" %pcapnum
+        wrpcap(pname, pkts)
+        pkts = []
+        count = 0
 
-    print 'Press CTRL+C to end capture'
-    try:
-        while True:
-            pc.dispatch(1, print_packet)
-    except KeyboardInterrupt:
-        print 'Packet statistics: %d packets received, %d packets dropped, %d packets dropped by the interface' %pc.stats()
+def test_dump_file():
+    print "Testing the dump file..."
+    dump_file = './pcap1.pcap'
+    if os.path.exists(dump_file):
+        print "dump fie %s found." %dump_file
+        pkts = sniff(offline=dump_file)
+        count = 0
+        while (count <=2):
+            print "----Dumping pkt:%s----" %count
+            print hexdump(pkts[count])
+            count += 1
+    else:
+        print "dump file %s not found." %dump_file
 
 if __name__ == '__main__':
-    main()
+    print "Started packet capturing and dumping... Press CTRL+C to exit"
+    sniff(prn=write_cap)
+    test_dump_file()
