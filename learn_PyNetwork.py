@@ -3,36 +3,37 @@
 #author="yexiaozhu"
 
 import argparse
-import json
-import urllib
-import requests
+import pcap
+from construct.examples.protocols.ipstack import  ip_stack
 
-# BASE_URL = 'http://ajax.googleapis.com/ajax/services/search/web?v=1.0'
-BASE_URL = 'https://developers.google.com/custom-search/'
-
-def get_search_url(query):
-    return "%s&%s" %(BASE_URL, query)
-
-def search_info(tag):
-    query = urllib.urlencode({'q': tag})
-    url = get_search_url(query)
-    response = requests.get(url)
-    print response
-    results = response.json()
-    print results
-
-    data = results['responseData']
+def print_packet(pktlen, data, timestamp):
+    """ Callback for printing the packet payload """
+    if not data:
+        return
     print data
-    print 'Found total results: %s ' % data['cursor']['estimatedResultCount']
-    hits = data['results']
-    print 'Found top %d hits:' % len(hits)
-    for h in hits:
-        print ' ', h['url']
-    print 'More results avilable from %s' % data['cursor']['moreResultsUrl']
+    stack = ip_stack.parse(data)
+    payload = stack.next.next.next
+    print payload
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Search info from Google')
-    parser.add_argument('--tag', action="store", dest="tag", default='Python books')
+def main():
+    # setup commandline arguments
+    parser = argparse.ArgumentParser(description='Packet Sniffer')
+    parser.add_argument('--iface', action='store', dest='iface', default='eth0')
+    parser.add_argument('--port', action='store', dest='port', default='80', type=int)
     # parse arguments
     given_args = parser.parse_args()
-    search_info(given_args)
+    iface, port = given_args.iface, given_args.port
+    # start sniffing
+    pc = pcap.pcap()
+    pc.open_live(iface, 1600, 0, 100)
+    pc.setfilter('dst port %d' %port)
+
+    print 'Press CTRL+C to end capture'
+    try:
+        while True:
+            pc.dispatch(1, print_packet)
+    except KeyboardInterrupt:
+        print 'Packet statistics: %d packets received, %d packets dropped, %d packets dropped by the interface' %pc.stats()
+
+if __name__ == '__main__':
+    main()
