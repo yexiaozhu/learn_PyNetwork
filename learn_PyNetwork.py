@@ -5,48 +5,29 @@
 import argparse
 from scapy.all import *
 from scapy.layers.inet import IP
+import os
+captured_data = dict()
 
+END_PORT = 1000
 
-def send_packet(recvd_pkt, src_ip, dst_ip, count):
-    """ Send modified packets"""
-    pkt_cnt = 0
-    p_out = []
+def monitor_packet(pkt):
+    if IP in pkt:
+        if not captured_data.has_key(pkt[IP].src):
+            captured_data[pkt[IP].src] = []
 
-    for p in recvd_pkt:
-        pkt_cnt += 1
-        new_pkt = p.payload
-        # print 'old_pkt[IP].dst:', new_pkt[IP].dst
-        # print 'old_pkt[IP].src:', new_pkt[IP].src
-        new_pkt[IP].dst = dst_ip
-        new_pkt[IP].src = src_ip
-        # print 'new_pkt[IP].dst:', new_pkt[IP].dst
-        # print 'new_pkt[IP].src:', new_pkt[IP].src
-        del new_pkt[IP].chksum
-        p_out.append(new_pkt)
-        if pkt_cnt % count == 0:
-            send(PacketList(p_out))
-            p_out = []
+    if TCP in pkt:
+        if pkt[TCP].sport <= END_PORT:
+            if not str(pkt[TCP].sport) in captured_data[pkt[IP].src]:
+                captured_data[pkt[IP].src].append(str(pkt[TCP].sport))
 
-    # Send rest of packet
-    send(PacketList(p_out))
-    print "Total packets sent: %d" %pkt_cnt
+    os.system('clear')
+    ip_list = sorted(captured_data.keys())
+    for key in ip_list:
+        ports = ', '.join(captured_data[key])
+        if len(captured_data[key]) == 0:
+            print '%s' %key
+        else:
+            print '%s (%s)' %(key, ports)
 
 if __name__ == '__main__':
-    # setup commandline arguments
-    parser = argparse.ArgumentParser(description='Packet Sniffer')
-    parser.add_argument('--infile', action="store", dest="infile", default='pcap10.pcap')
-    parser.add_argument('--src-ip', action="store", dest="src_ip", default='1.1.1.1')
-    parser.add_argument('--dst-ip', action="store", dest="dst_ip", default='2.2.2.2')
-    parser.add_argument('--count', action="store", dest="count", default=100, type=int)
-    # parse arguments
-    given_args = ga = parser.parse_args()
-    global src_ip, dst_ip
-    infile, src_ip, dst_ip, count = ga.infile, ga.src_ip, ga.dst_ip, ga.count
-    try:
-        pkt_reader = PcapReader(infile)
-        print pkt_reader
-        send_packet(pkt_reader, src_ip, dst_ip, count)
-    except IOError, error:
-        print error
-        print "Failed reading file %s contents" % infile
-        sys.exit(1)
+    sniff(prn=monitor_packet, store=0)
