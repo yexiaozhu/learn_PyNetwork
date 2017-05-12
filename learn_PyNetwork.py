@@ -2,30 +2,44 @@
 #coding=utf-8
 #author="yexiaozhu"
 
-import os
-from scapy import *
-from scapy.all import *
-def modify_packet_header(pkt):
-    """ Parse the header and add an extra header"""
-    if pkt.haslayer(TCP) and pkt.getlayer(TCP).dport == 80 and pkt.haslayer(Raw):
-        # print 1
-        print 'pkt:', pkt
-    #     hdr = pkt[TCP].payload
-    #     hdr.__dict__
-    #     print type(hdr)
-    #     extra_item = {'Extra Header': ' extra value'}
-    #     hdr.update(extra_item)
-    #     send_hdr = '\r\n'.join(hdr)
-    #     # print 'send_hdr:', send_hdr
-    #     pkt[TCP].payload = send_hdr
+import argparse
+import socket
+import sys
 
-        pkt.show()
+def scan_ports(host, start_port, end_port):
+    """ Scan remote hosts"""
+    # Create socket
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    except socket.error, err_msg:
+        print 'Socket creation failed. Error code: ' + str(err_msg[0]) + 'Error message:' + err_msg[1]
+        sys.exit()
 
-        del pkt[IP].chksum
-        send(pkt)
-    # else:
-    #     print 2
+    #Get IP of remote host
+    try:
+        remote_ip = socket.gethostbyname(host)
+    except socket.error, error_msg:
+        print error_msg
+        sys.exit()
+
+    #Scan ports
+    end_port += 1
+    for port in range(start_port, end_port):
+        try:
+            sock.connect((remote_ip, port))
+            print 'Port ' + str(port) + ' is open'
+            sock.close()
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        except socket.error:
+            pass # skip various socket errors
 
 if __name__ == '__main__':
-    # start sniffing
-    sniff(filter="tcp and ( port 80 )", prn=modify_packet_header)
+    # setup commandline arguments
+    parser = argparse.ArgumentParser(description='Remote Port Scanner')
+    parser.add_argument('--host', action="store", dest="host", default='localhost')
+    parser.add_argument('--start-port', action="store", dest="start_port", default=1, type=int)
+    parser.add_argument('--end-port', action="store", dest="end_port", default=100, type=int)
+    # parse arguments
+    given_args = parser.parse_args()
+    host, start_port, end_port = given_args.host, given_args.start_port, given_args.end_port
+    scan_ports(host, start_port, end_port)
