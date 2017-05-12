@@ -3,40 +3,29 @@
 #author="yexiaozhu"
 
 import os
+from scapy import *
 from scapy.all import *
+def modify_packet_header(pkt):
+    """ Parse the header and add an extra header"""
+    if pkt.haslayer(TCP) and pkt.getlayer(TCP).dport == 80 and pkt.haslayer(Raw):
+        # print 1
+        print 'pkt:', pkt
+    #     hdr = pkt[TCP].payload
+    #     hdr.__dict__
+    #     print type(hdr)
+    #     extra_item = {'Extra Header': ' extra value'}
+    #     hdr.update(extra_item)
+    #     send_hdr = '\r\n'.join(hdr)
+    #     # print 'send_hdr:', send_hdr
+    #     pkt[TCP].payload = send_hdr
 
-pkts = []
-count = 0
-pcapnum = 0
+        pkt.show()
 
-def write_cap(x):
-    global pkts
-    global count
-    global pcapnum
-    pkts.append(x)
-    count += 1
-    if count == 3:
-        pcapnum += 1
-        pname = "pcap%d.pcap" %pcapnum
-        wrpcap(pname, pkts)
-        pkts = []
-        count = 0
-
-def test_dump_file():
-    print "Testing the dump file..."
-    dump_file = './pcap1.pcap'
-    if os.path.exists(dump_file):
-        print "dump fie %s found." %dump_file
-        pkts = sniff(offline=dump_file)
-        count = 0
-        while (count <=2):
-            print "----Dumping pkt:%s----" %count
-            print hexdump(pkts[count])
-            count += 1
-    else:
-        print "dump file %s not found." %dump_file
+        del pkt[IP].chksum
+        send(pkt)
+    # else:
+    #     print 2
 
 if __name__ == '__main__':
-    print "Started packet capturing and dumping... Press CTRL+C to exit"
-    sniff(prn=write_cap)
-    test_dump_file()
+    # start sniffing
+    sniff(filter="tcp and ( port 80 )", prn=modify_packet_header)
