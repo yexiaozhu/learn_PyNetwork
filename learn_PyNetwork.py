@@ -5,41 +5,34 @@
 import argparse
 import socket
 import sys
+from random import randint
+from scapy.all import IP, TCP, UDP, conf, send
 
-def scan_ports(host, start_port, end_port):
-    """ Scan remote hosts"""
-    # Create socket
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    except socket.error, err_msg:
-        print 'Socket creation failed. Error code: ' + str(err_msg[0]) + 'Error message:' + err_msg[1]
-        sys.exit()
+def send_packet(protocol=None, src_ip=None, src_port=None, flags=None, dst_ip=None, dst_port=None, iface=None):
+    """Modify and send an IP packet"""
+    if protocol == 'tcp':
+        packet = IP(src=src_ip, dst=dst_ip)/TCP(flags=flags, sport=src_port, dport=dst_port)
+        # print packet
+    elif protocol == 'udp':
+        if flags:
+            raise Exception(" Flags are not supported for udp")
+        packet = IP(src=src_ip, dst=dst_ip)/UDP(sport=src_port, dport=dst_port)
+    else:
+        raise Exception("Unknown protocol %s" % protocol)
 
-    #Get IP of remote host
-    try:
-        remote_ip = socket.gethostbyname(host)
-    except socket.error, error_msg:
-        print error_msg
-        sys.exit()
-
-    #Scan ports
-    end_port += 1
-    for port in range(start_port, end_port):
-        try:
-            sock.connect((remote_ip, port))
-            print 'Port ' + str(port) + ' is open'
-            sock.close()
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        except socket.error:
-            pass # skip various socket errors
+    send(packet, iface=iface)
 
 if __name__ == '__main__':
     # setup commandline arguments
-    parser = argparse.ArgumentParser(description='Remote Port Scanner')
-    parser.add_argument('--host', action="store", dest="host", default='localhost')
-    parser.add_argument('--start-port', action="store", dest="start_port", default=1, type=int)
-    parser.add_argument('--end-port', action="store", dest="end_port", default=100, type=int)
+    parser = argparse.ArgumentParser(description='Packet Modifier')
+    parser.add_argument('--iface', action="store", dest="iface", default='ens33')
+    parser.add_argument('--protocol', action="store", dest="protocol", default='tcp')
+    parser.add_argument('--src-ip', action="store", dest="src_ip", default='1.1.1.1')
+    parser.add_argument('--src-port', action="store", dest="src_port", default=randint(0, 65535))
+    parser.add_argument('--dst-ip', action="store", dest="dst_ip",default='192.168.92.2')
+    parser.add_argument('--dst-port', action="store", dest="dst_port", default=randint(0, 65535))
+    parser.add_argument('--flags', action="store", dest="flags", default=None)
     # parse arguments
     given_args = parser.parse_args()
-    host, start_port, end_port = given_args.host, given_args.start_port, given_args.end_port
-    scan_ports(host, start_port, end_port)
+    iface, protocol, src_ip, src_port, dst_ip, dst_port, flags = given_args.iface, given_args.protocol, given_args.src_ip, given_args.src_port, given_args.dst_ip, given_args.dst_port, given_args.flags
+    send_packet(protocol, src_ip, src_port, flags, dst_ip, dst_port, iface)
