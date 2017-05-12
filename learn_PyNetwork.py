@@ -3,36 +3,50 @@
 #author="yexiaozhu"
 
 import argparse
-import socket
-import sys
-from random import randint
-from scapy.all import IP, TCP, UDP, conf, send
+from scapy.all import *
+from scapy.layers.inet import IP
 
-def send_packet(protocol=None, src_ip=None, src_port=None, flags=None, dst_ip=None, dst_port=None, iface=None):
-    """Modify and send an IP packet"""
-    if protocol == 'tcp':
-        packet = IP(src=src_ip, dst=dst_ip)/TCP(flags=flags, sport=src_port, dport=dst_port)
-        # print packet
-    elif protocol == 'udp':
-        if flags:
-            raise Exception(" Flags are not supported for udp")
-        packet = IP(src=src_ip, dst=dst_ip)/UDP(sport=src_port, dport=dst_port)
-    else:
-        raise Exception("Unknown protocol %s" % protocol)
 
-    send(packet, iface=iface)
+def send_packet(recvd_pkt, src_ip, dst_ip, count):
+    """ Send modified packets"""
+    pkt_cnt = 0
+    p_out = []
+
+    for p in recvd_pkt:
+        pkt_cnt += 1
+        new_pkt = p.payload
+        # print 'old_pkt[IP].dst:', new_pkt[IP].dst
+        # print 'old_pkt[IP].src:', new_pkt[IP].src
+        new_pkt[IP].dst = dst_ip
+        new_pkt[IP].src = src_ip
+        # print 'new_pkt[IP].dst:', new_pkt[IP].dst
+        # print 'new_pkt[IP].src:', new_pkt[IP].src
+        del new_pkt[IP].chksum
+        p_out.append(new_pkt)
+        if pkt_cnt % count == 0:
+            send(PacketList(p_out))
+            p_out = []
+
+    # Send rest of packet
+    send(PacketList(p_out))
+    print "Total packets sent: %d" %pkt_cnt
 
 if __name__ == '__main__':
     # setup commandline arguments
-    parser = argparse.ArgumentParser(description='Packet Modifier')
-    parser.add_argument('--iface', action="store", dest="iface", default='ens33')
-    parser.add_argument('--protocol', action="store", dest="protocol", default='tcp')
+    parser = argparse.ArgumentParser(description='Packet Sniffer')
+    parser.add_argument('--infile', action="store", dest="infile", default='pcap10.pcap')
     parser.add_argument('--src-ip', action="store", dest="src_ip", default='1.1.1.1')
-    parser.add_argument('--src-port', action="store", dest="src_port", default=randint(0, 65535))
-    parser.add_argument('--dst-ip', action="store", dest="dst_ip",default='192.168.92.2')
-    parser.add_argument('--dst-port', action="store", dest="dst_port", default=randint(0, 65535))
-    parser.add_argument('--flags', action="store", dest="flags", default=None)
+    parser.add_argument('--dst-ip', action="store", dest="dst_ip", default='2.2.2.2')
+    parser.add_argument('--count', action="store", dest="count", default=100, type=int)
     # parse arguments
-    given_args = parser.parse_args()
-    iface, protocol, src_ip, src_port, dst_ip, dst_port, flags = given_args.iface, given_args.protocol, given_args.src_ip, given_args.src_port, given_args.dst_ip, given_args.dst_port, given_args.flags
-    send_packet(protocol, src_ip, src_port, flags, dst_ip, dst_port, iface)
+    given_args = ga = parser.parse_args()
+    global src_ip, dst_ip
+    infile, src_ip, dst_ip, count = ga.infile, ga.src_ip, ga.dst_ip, ga.count
+    try:
+        pkt_reader = PcapReader(infile)
+        print pkt_reader
+        send_packet(pkt_reader, src_ip, dst_ip, count)
+    except IOError, error:
+        print error
+        print "Failed reading file %s contents" % infile
+        sys.exit(1)
